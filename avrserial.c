@@ -41,6 +41,10 @@ int main(void)
 //		There are two termios structs being created here. One will contain the current device settings (default), before the program can do any changes to it, called oldtio. The newtio will serve to configure the new terminal connection.
 
   char buf[255];
+  char comb_buf[7] = {0};
+  
+ int avrresp;
+  
 /* 
   Open modem device for reading and writing and not as controlling tty
   because we don't want to get killed if linenoise sends CTRL-C.
@@ -152,16 +156,32 @@ int main(void)
     to the actual number of characters actually read */
     res = read(fd,buf,255); 
     buf[res]=0;             /* set end of string, so we can printf */
-    
-    if (buf[0] == 0xF1)
+    char *bufpt = &buf[0];
+        
+    if (*bufpt == 0xF1)
     {
+        avrresp = avrprocessing(bufpt, comb_buf);
+        if(avrresp == 1)
+        {
+            memset(comb_buf, 0, sizeof comb_buf);
+        }
+    }
+    else 
+  
+ /* 
+    if (*bufpt == 0xF1)
+    {
+      
       if ((int)buf[1] == 0xF3)
         printf("\nMode On\n");
       else printf("\n%c\n", avrkey2str((int)buf[1]));
     }
     else 
+    
+  */
       printf(":%s", buf);
-//  if (buf[0]=='z') STOP=TRUE;
+      
+ //if (buf[0]=='z') STOP=TRUE;
  }
  /* restore the old port settings */
  tcsetattr(fd,TCSANOW,&oldtio);

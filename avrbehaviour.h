@@ -1,3 +1,7 @@
+char avrkey2str(int);
+int comb_process(char, char *);
+int avrprocessing(char *, char *);
+
 char avrkey2str(int key){
 	
 	char character = 0;
@@ -71,5 +75,59 @@ char avrkey2str(int key){
 	return character;
 }
 
+volatile int avroutput;
+int i = 0;
+int b = 0;
 
+int avrprocessing(char *bufpt, char *comb_buf){
+	
+	while((avroutput = (int)*(++bufpt)) != 0xF1)
+	{
+		
+		if (avroutput == 0xF3)
+		  printf("\nMode\n");
+		else if (avroutput == 0xE7)
+		  printf("\nRe-enter combination\n");
+		else
+		{ 
+			printf("\n%c\n", avrkey2str(avroutput));
+			b = (comb_process(avroutput, comb_buf));
+			switch(b)
+			{
+				case 1:
+					printf("\n!%s!\n", comb_buf);
+				break;
+				
+				case 0:
+					printf("\n!%s!\t>>Combination acquired successfully!", comb_buf);
+					b = 0;
+					i = 0;
+					return 1;
+				break;
+				
+				case -1:
+				break;
+					printf("\n!!ERROR!!\n");
+				
+			}
+		}
+	}
+	
+	return 0;
+}
+
+int comb_process(char input, char *comb)
+{
+
+	if(i < 6 && i >= 0)
+	{
+		*(comb+i) = avrkey2str(input);
+		if(i == 5)
+			return 0;
+	}
+	else return -1;
+	
+	i++;
+	return 1;
+}
 
