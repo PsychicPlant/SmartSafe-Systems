@@ -168,18 +168,7 @@ int main(void)
     }
     else 
   
- /* 
-    if (*bufpt == 0xF1)
-    {
-      
-      if ((int)buf[1] == 0xF3)
-        printf("\nMode On\n");
-      else printf("\n%c\n", avrkey2str((int)buf[1]));
-    }
-    else 
-    
-  */
-      printf(":%s", buf);
+    printf("%s", buf);
       
  //if (buf[0]=='z') STOP=TRUE;
  }
