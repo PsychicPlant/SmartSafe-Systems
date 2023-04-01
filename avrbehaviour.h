@@ -123,7 +123,11 @@ int comb_process(char input, char *comb)
 	{
 		*(comb+i) = avrkey2str(input);
 		if(i == 5)
+		{
+//			i++;
+//			*(comb+i) = 0x0d;
 			return 0;
+		}
 	}
 	else return -1;
 	
