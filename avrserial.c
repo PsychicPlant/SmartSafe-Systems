@@ -1,5 +1,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <termios.h>
@@ -14,7 +15,9 @@
 /* baudrate settings are defined in <asm/termbits.h>, which is
 included by <termios.h> */
 #define BAUDRATE B2400 
-#define MYFIFO "combs" 
+#define MYFIFO1 "combs1"
+#define MYFIFO2 "combs2"
+
 
 //		The BAUDRATE for our application is yet to be determined, but must start at 2400. As such, just as indicated in the termios.h file, we will set this value to B2400.
 
@@ -29,102 +32,84 @@ included by <termios.h> */
 #define FALSE 0
 #define TRUE 1
 
+
 volatile int STOP=FALSE; 
 
 //		The volatile keyword defines a variable that will change due to external interactions. It is necessary to specify this because we do not want the compiler optimizing the code for the execution of that pre-defined var value.
 
 int main(void)
 {
-    
+
     int fd1, res, avrresp;
-    struct termios oldtio,newtio;
-    char buf[512];
-    char cli_buf[512];
-    char comb_buf[7] = {0};
-    pid_t cpid;
-    int pipefd[2];
-    int pipe_stdio_1[2];
+    
+    /*
+     *  fd1 is going to be a file descriptor for serial0, where it will be used to read/write from/to it.
+     *  res is the result variable when reading the contents of serial0. Contains number of characters read.
+     *  avrresp is the return value of avrprocessing() -> avrbehaviour.h function, which will determine AVR input processing behaviour.
+     *      currently used to check if 6 input keys have been pressed before writting digits to a file.
+    */
+    
+    struct termios oldtio,newtio;   //These structs are important for starting, configuring, using and quitting a new terminal application.
+    char avr_buf[512];              //Used to store AVR serial information like debug strings or input read from fd1
+    char cli_buf[512];              //Used to store stdio input read from fd STDIN_FILENO
+    char child_buf[512];            //Used to store child input read from fd read_child (pipe)
+    char fifo_buf[512];             //Used to store fifo input read from fd fifofd_r (pipe)
+    char comb_buf[7] = {0};         //Used to store AVR key input (determined by values in avr_buf)
+    pid_t cpid;                     //This variable will store the state of the fork() function
+    int pipefd[2];                  //The following are file descriptors for the different pipes
+    int pipe_stdio_1[2];            
     int pipe_stdio_2[2];
 
-    struct pollfd *pfds;
-    pfds = malloc(sizeof(struct pollfd));
- 
-
-    if(access(MYFIFO, F_OK) != 0)
-    {
-        if(mkfifo(MYFIFO, 0666) == -1)
+    umask(011);
+    if(access(MYFIFO1, F_OK) != 0)   //This statement checks the existance of a fifo file of name defined by MYFIFO1, and promotes its creation
+    {                               //if it does not exist.
+        if(mkfifo(MYFIFO1, S_IRWXO | S_IRWXG | S_IRWXU | 0777) == -1)
           {perror("Error making FIFO file."); exit(-1);}
+        else
+          printf("Making new FIFO file: %s\n", MYFIFO1);
+    }
+    
+    if(access(MYFIFO2, F_OK) != 0)   //This statement checks the existance of a fifo file of name defined by MYFIFO1, and promotes its creation
+    {                               //if it does not exist.
+        if(mkfifo(MYFIFO2, S_IRWXO | S_IRWXG | S_IRWXU | 0777) == -1)
+          {perror("Error making FIFO file."); exit(-1);}
+        else
+          printf("Making new FIFO file: %s\n", MYFIFO2);
     }
 
+    //The following statements will create pipes using the file descriptor arrays provided.
+    //These are done right before the forking of this program.
     pipe(pipefd);
     pipe(pipe_stdio_1);
     pipe(pipe_stdio_2);
     
-    //int write_child = pipe_stdio_1[1];
-    int read_child = pipe_stdio_2[0];
-    int cmd_child_write = pipefd[1];
-    
+    if(fork() == 0)
+    {
+        system("curl -s http://localhost/connect_server.php");
+        exit(0);
+    }
+    else
 
-    cpid = fork();
-    if (cpid == -1) {
-        perror("fork");
+    cpid = fork();              //This statement creates a copy of this process and its memory (see fork() for more information) called a child process.
+    if (cpid == -1) {           //Indicates any failure in creating a child process.
+        perror("fork");         
         exit(EXIT_FAILURE);
     }
-
-    if (cpid == 0)
+    /*
+     *  If the process is the child, it will perform the following instructions.
+     *  The goal of doing this is to create a separate process that runs in parallel with this terminal application.
+     *  Since this program needs to be very dynamic, taking into account different sources of input and output, I found it easier to separate these
+     *    tasks. 
+     *  One big contributor to this is also the fact that I will be receiving signals from the webserver, and those i would like to be processed 
+     *    in parallel with my main application.
+    */
+    
+    
+    if (cpid == 0)              
     {  
-        close(pipefd[1]);
-        close(pipe_stdio_1[1]); //closes writting end in stdio1
-        close(pipe_stdio_2[0]); //closes reading end in stdio2
-        dup2(pipe_stdio_1[0], STDIN_FILENO);
-        dup2(pipe_stdio_2[1], STDOUT_FILENO);
+
+        #include </home/gui/AVRserial/childbehaviour.h>
         
-        struct pollfd *child_pfds;
-        child_pfds = malloc(sizeof(struct pollfd));
-        int write_parent = STDOUT_FILENO;
-        //int read_parent = STDIN_FILENO;
-        int cmd_child_read = pipefd[0];
-        char child_cmd[255];
-
-        
-        child_pfds[0].fd = cmd_child_read;
-        child_pfds[0].events = POLLIN;
-
-        //char ping[] = "PONG\n";
-        //write(STDOUT_FILENO, &ping, sizeof(ping));
-
-        int fifofd_w = open(MYFIFO, O_WRONLY);
-        if (fifofd_w == -1)
-          {perror("Error opening FIFO file for writting."); exit(-1);}
-        else
-          dprintf(write_parent, "Opened file for writting on avrchild.\n");
-
-        int stop = TRUE;
-        while(stop)
-        {
-            int prob = poll(child_pfds, 1, 10);
-            switch(prob)
-            {
-                case -1:
-                    dprintf(write_parent, "Error polling.\n");
-                    exit(-1);
-                    break;
-                case 0:
-                    break;
-                
-                default:
-                    if(child_pfds[0].revents & POLLIN)
-                    {
-                        read(cmd_child_read, &child_cmd, 255);
-                        dprintf(write_parent, "%s!!", child_cmd);
-                        if(strcmp(child_cmd, "exit\n") == 0)
-                          {
-                              dprintf(write_parent, "Killing child. Stand by.\n");
-                              exit(0);
-                          }
-                    }
-            }
-        }
         /* 
         char** pipe_arg = malloc(sizeof(*pipe_arg));
         sprintf(pipe_arg[0],"%d", pipefd[0]);
@@ -132,29 +117,22 @@ int main(void)
         execv("avrcli", pipe_arg);
         perror("ERROR executing program avrcli.");
         */
-        exit(-1);
         
+        exit(0);
     } 
-    else 
-    {
-        close(pipefd[0]);  
-        close(pipe_stdio_1[0]); //closes reading end in stdio1
-        close(pipe_stdio_2[1]); //closes writting end in stdio2   
-  
-        int fifofd_r = open(MYFIFO, O_RDONLY);
-        if (fifofd_r == -1)
-          {perror("Error opening FIFO file for reading."); exit(-1);}
-        else
-          printf("Opened file for reading on avrserial.\n");
-    }
 
+    close(pipefd[0]);  
+    close(pipe_stdio_1[0]); //closes reading end in stdio1
+    close(pipe_stdio_2[1]); //closes writting end in stdio2   
+        
+    int write_child = pipe_stdio_1[1];
+    int read_child = pipe_stdio_2[0];
+    int cmd_child_write = pipefd[1];
     
-          
-    char cool[512];
-    int g = read(read_child, &cool, sizeof(cool));
-    cool[g] = '\0';
-    printf("%s\n", cool);
-         
+    struct pollfd *pfds;            //This structure is necessary for the functioning of the poll() function.
+    int numfd = 4;                  //This variable holds the number of file descriptors that will be polled at once.
+    pfds = calloc(numfd, sizeof(struct pollfd));    //This struct will contain all fds to be polled, and their expected behavior.
+ 
 
     fd1 = open(MODEMDEVICE, O_RDWR | O_NOCTTY );
     pfds[0].fd = fd1;
@@ -162,6 +140,9 @@ int main(void)
     
     pfds[1].fd = STDOUT_FILENO;
     pfds[1].events = POLLIN;
+    
+    pfds[2].fd = read_child;
+    pfds[2].events = POLLIN;
     
     if (fd1 <0) {perror(MODEMDEVICE); exit(-1); }
     
@@ -195,7 +176,8 @@ int main(void)
     tcsetattr(fd1,TCSANOW,&newtio);
 
     
-    while (STOP==FALSE) {     
+    while (STOP==FALSE) 
+    {     
     /* loop until we have a terminating condition */
     /* read blocks program execution until a line terminating character is 
     input, even if more than 255 chars are input. If the number
@@ -203,71 +185,122 @@ int main(void)
     subsequent reads will return the remaining chars. res will be set
     to the actual number of characters actually read */
 
-    int ready = poll(pfds, 2, 100);
-    switch(ready)
-    {
-      case -1:
-        printf("Error polling.\n");
-        exit(-1);
-        break;
-      case 0:
-        break;
-      
-      default:
-      {
-        if(pfds[0].revents & POLLIN)
-        { 
-            printf("POLLIN\n");
-            res = read(fd1,buf,255); 
-            buf[res]=0;             /* set end of string, so we can printf */
-            char *bufpt = &buf[0];
-            
-            
-            if (*bufpt == 0xF1)
-            {
-              avrresp = avrprocessing(bufpt, comb_buf);
-              if(avrresp == 1)
-              {
-                FILE * fd2 = fopen(COMBTXT, "a" ); 
-                if (fd2 <0) {perror(COMBTXT); exit(-1); }
-                
-                fprintf(fd2, "%s\n", comb_buf);
-                fclose(fd2);
-                memset(comb_buf, 0, sizeof comb_buf);
-              }
-            }
-          }
-          else if(pfds[1].revents & POLLIN)
+        
+        int ready = poll(pfds, numfd, 100);
+        switch(ready)
+        {
+          case -1:
+            printf("Error polling.\n");
+            exit(-1);
+            break;
+          case 0:
+            break;
+          
+          default:
           {
-              
-              int r = read(STDIN_FILENO, &cli_buf, 512);
-              cli_buf[r] = '\0';
-              printf("%s", cli_buf);
-              
-              if(strcmp(cli_buf, "q\n") == 0)
+            
+            if(pfds[0].revents & POLLIN)
+            { 
+                //printf("POLLIN\n");
+                res = read(fd1,avr_buf,255); 
+                avr_buf[res]= '\0';             /* set end of string, so we can printf */
+                char *bufpt = &avr_buf[0];
+                
+                
+                if (*bufpt == 0xF1)
                 {
-                  printf("Terminating session. Stand by.\n");
-                  STOP = TRUE;
+                  avrresp = avrprocessing(bufpt, comb_buf);
+                  if(avrresp == 1)
+                  {
+                    FILE * fd2 = fopen(COMBTXT, "a" ); 
+                    if (fd2 <0) {perror(COMBTXT); exit(-1); }
+                    
+                    fprintf(fd2, "%s\n", comb_buf);
+                    fclose(fd2);
+                    memset(comb_buf, 0, sizeof comb_buf);
+                  }
                 }
-              else if(strcmp(cli_buf, "t\n") == 0)
-              {
-                  dprintf(cmd_child_write, "Ohio\n");
-              }
+                else printf("%s", avr_buf);
+            }
+            else if(pfds[1].revents & POLLIN)
+            {
+                  
+                int r = read(STDIN_FILENO, &cli_buf, 512);
+                cli_buf[r] = '\0';
+                //printf("%s", cli_buf);
+                
+                if(strcmp(cli_buf, "q\n") == 0)
+                {
+                    printf("Terminating session. Stand by.\n");
+                    int child_status = 0;
+    
+                    dprintf(cmd_child_write, "exit\n");
+                    
+                    wait(&child_status);
+                    if(WIFEXITED(child_status))
+                      printf("Child successfully killed!\n");
+                    else
+                      printf("Error killing this child!\n");
+                      
+                    STOP = TRUE;
+                    
+                }
+                else if(strcmp(cli_buf, "t\n") == 0)
+                {
+                    printf("Writting to child cmd.\n");
+                    dprintf(cmd_child_write, "Command\n");
+                    
+                    printf("Writting to child text.\n");
+                    dprintf(write_child, "Text\n");
+                }
+                else if(strcmp(cli_buf, "o\n") == 0)
+                {
+                    dprintf(fd1, "%c%c%c", 0xF2, 'o', 0xF2);
+                    printf("Open command sent!\n");
+                }
+                else if(strcmp(cli_buf, "s\n") == 0)
+                {
+                    dprintf(fd1, "%c%c%c", 0xF2, 's', 0xF2);
+                    printf("Status command sent!\n");
+                }
+                else if(strcmp(cli_buf, "c\n") == 0)
+                {
+                    dprintf(fd1, "%c%c%c", 0xF2, 'c', 0xF2);
+                    printf("Close command sent!\n");
+                }
+            }
+            else if(pfds[2].revents & POLLIN)
+            {
+                int r = read(read_child, &child_buf, 512);
+                child_buf[r] = '\0';
+                printf("%s", child_buf);
+            }
+
+            
+            printf("\n");
+            break;
           }
-          else printf("%s", buf);
-          break;
+          
+
         }
-      
-      //if (buf[0]=='z') STOP=TRUE;
-      }
+    
     }
     /* restore the old port settings */
     
-    dprintf(cmd_child_write, "exit\n");
-    tcsetattr(fd1,TCSANOW,&oldtio);
-    close(fd1);
-    free(pfds);
     
+    for(int i = 0; i < (numfd + 1); i++)
+    {
+        close(pfds[i].fd);
+    }
+    
+    free(pfds);
+    tcsetattr(fd1,TCSANOW,&oldtio);
     return 0;
+}
+
+int test(void)
+{
+
+  return 0;
 }
   
