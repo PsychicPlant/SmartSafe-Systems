@@ -1,7 +1,4 @@
-#define STATE 0x00
-#define AVRMODE 0x01
-
-volatile int state = (STATE | AVRMODE);
+volatile int state = (STATE);		//Default state Input = 0; Reg = 0
 char avrkey2str(int);
 int comb_process(char, char *);
 int avrprocessing(char *, char *);
@@ -87,16 +84,16 @@ int avrprocessing(char *bufpt, char *comb_buf){
 	
 	while((avroutput = (int)*(++bufpt)) != 0xF1)
 	{
-		
-		if ((avroutput == 0xF3) && (state & AVRMODE))
+
+		if ((avroutput == 0xF3) && ((state & AVRMODE) == 0))
 		{
 		  printf("\nMode ON\n");
-		  state = (state & ~(AVRMODE));
+		  state = state | AVRMODE;
 		}
-		else if ((avroutput == 0xF3) && ~(state & AVRMODE))
+		else if ((avroutput == 0xF3) && ((state & AVRMODE) == 1))
 		{
 		  printf("\nMode OFF\n");
-		  state = (state | AVRMODE);
+		  state = state & ~(AVRMODE);
 		}
 		else if (avroutput == 0xE7)
 		  printf("\nRe-enter combination\n");

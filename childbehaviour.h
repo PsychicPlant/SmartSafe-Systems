@@ -72,6 +72,19 @@ int stop = TRUE;
                               stop = FALSE;
                               exit(0);
                           }
+                          
+                        //Mesage returned to webserver if combination was acquired and
+                        //is ready to use.
+                        else if(strcmp(child_cmd, "reg_ok\n") == 0)     
+                        {
+                            char comb_send[] = {0};
+                            read(read_parent, &comb_send, 512);
+                            dprintf(fifofd_w, comb_send);
+                        }
+                        
+                        //Message returned to webserver if error occured
+                        else if(strcmp(child_cmd, "reg_err\n") == 0)
+                        {}
                     }
                     else if(child_pfds[1].revents & POLLIN)
                     {
@@ -80,24 +93,31 @@ int stop = TRUE;
                         dprintf(write_parent, "%s", child_text);
                     }
                     
-                    else if(child_pfds[2].revents & POLLIN)
+                    else if(child_pfds[2].revents & POLLIN)     //Reads commands sent from Webserver
                     {
-		                int r = read(fifofd_r, &fifo_buf, 512);
+		                read(fifofd_r, &fifo_buf, 512);
 		                if(*fifo_buf == 0xF3)
 		                {
+                            
 		                    switch(fifo_buf[1])
 		                    {
 		                        case '!':
-		                          dprintf(write_parent, "Read by child\n");
-		                          write(fifofd_w, "OK!", 4);
-		                          dprintf(write_parent, "Wrote to child\n");
-		                          break;
-		                        
+                                    dprintf(write_parent, "Read by child\n");
+                                    write(fifofd_w, "OK!", 4);
+                                    dprintf(write_parent, "Wrote to child\n");
+                                    break;
+                                
+                                case '+':
+                                    dprintf(write_parent, "Registering user metrics...\n");
+                                    sleep(1);
+                                    dprintf(write_parent, "+\n");
+                                    break;
+                                    
 		                        default:
 		                          break;
 		                    }
 		                }
-		                fifo_buf[r] = '\0';
+		                //fifo_buf[r] = '\0';
 		                //printf("%s\n", fifo_buf);
 		            }
 						

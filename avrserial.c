@@ -10,13 +10,17 @@
 #include <string.h>
 #include <unistd.h>
 #include <poll.h>
+
+#define STATE 0x00
+#define AVRMODE 0x01    //Defines if AVR is in input mode or not
+#define AVRREG 0x02     //Defines if AVR is registering a new user, or evaluating an existing one
 #include </home/gui/AVRserial/avrbehaviour.h>
 
 /* baudrate settings are defined in <asm/termbits.h>, which is
 included by <termios.h> */
 #define BAUDRATE B2400 
-#define MYFIFO1 "combs1"
-#define MYFIFO2 "combs2"
+#define MYFIFO1 "pipe1"   //Used to read from different devices
+#define MYFIFO2 "pipe2"   //Used to write to different devices
 
 
 //		The BAUDRATE for our application is yet to be determined, but must start at 2400. As such, just as indicated in the termios.h file, we will set this value to B2400.
@@ -109,15 +113,6 @@ int main(void)
     {  
 
         #include </home/gui/AVRserial/childbehaviour.h>
-        
-        /* 
-        char** pipe_arg = malloc(sizeof(*pipe_arg));
-        sprintf(pipe_arg[0],"%d", pipefd[0]);
-        pipe_arg[1] = NULL; 
-        execv("avrcli", pipe_arg);
-        perror("ERROR executing program avrcli.");
-        */
-        
         exit(0);
     } 
 
@@ -186,7 +181,7 @@ int main(void)
     to the actual number of characters actually read */
 
         
-        int ready = poll(pfds, numfd, 100);
+        int ready = poll(pfds, numfd, 10);
         switch(ready)
         {
           case -1:
@@ -206,19 +201,36 @@ int main(void)
                 avr_buf[res]= '\0';             /* set end of string, so we can printf */
                 char *bufpt = &avr_buf[0];
                 
-                
                 if (*bufpt == 0xF1)
                 {
-                  avrresp = avrprocessing(bufpt, comb_buf);
-                  if(avrresp == 1)
-                  {
-                    FILE * fd2 = fopen(COMBTXT, "a" ); 
-                    if (fd2 <0) {perror(COMBTXT); exit(-1); }
+                    avrresp = avrprocessing(bufpt, comb_buf);
+                    if(avrresp == 1)
+                    {
+                            //This checks if the AVRREG flag was set.
+                            //If it was, it will send the combination thru the pipe towards
+                            //the webserver using 0xF3 as an integrity check. The combination will still
+                            //be logged into the COMBTXT file.
+                            
+                          if(state == (STATE | AVRMODE | AVRREG))   
+                          {
+
+                                //Sends reg_status to child, which sends to webserver
+                                dprintf(cmd_child_write, "reg_ok\n");
+                                dprintf(write_child, "%s", comb_buf);
+                                
+                                //Returns input state to default STATE
+                                state = STATE;
+                                printf("Registered user combination!\n");
+                          }
+                              
+                          FILE * fd2 = fopen(COMBTXT, "a" ); 
+                          if (fd2 <0) {perror(COMBTXT); exit(-1); }
+                            
+                          fprintf(fd2, "%s\n", comb_buf);
+                          fclose(fd2);
+                          memset(comb_buf, 0, sizeof comb_buf);
+                    }
                     
-                    fprintf(fd2, "%s\n", comb_buf);
-                    fclose(fd2);
-                    memset(comb_buf, 0, sizeof comb_buf);
-                  }
                 }
                 else printf("%s", avr_buf);
             }
@@ -273,7 +285,25 @@ int main(void)
             {
                 int r = read(read_child, &child_buf, 512);
                 child_buf[r] = '\0';
-                printf("%s", child_buf);
+                
+                     //Checks for "+\n" cmd sent from the webserver to begin registration
+                     //operations. This will set AVRMODE and AVRREG flags which will async enable the 
+                     //keypad to work (without needing to press #) and will change the interpretation of
+                     //the fetched combination in the pfds[0] events above.
+                
+                if(strcmp(child_buf, "+\n") == 0)          
+                {   
+                    //Begins async input from the AVR
+                    printf("Detected\n");
+                    dprintf(fd1, "%c%c%c", 0xF2, 'r', 0xF2);
+                    
+                    //Changes state variable to indicate AVR is in input mode
+                    //state = 0b00000011
+                    state = (STATE | AVRMODE | AVRREG); 
+                              
+                }
+                else
+                    printf("%s", child_buf);
             }
 
             
