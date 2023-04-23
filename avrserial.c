@@ -10,10 +10,13 @@
 #include <string.h>
 #include <unistd.h>
 #include <poll.h>
+#include <mariadb/mysql.h>
 
 #define STATE 0x00
 #define AVRMODE 0x01    //Defines if AVR is in input mode or not
 #define AVRREG 0x02     //Defines if AVR is registering a new user, or evaluating an existing one
+
+char comb_buf[7] = {0};         //Used to store AVR key input (determined by values in avr_buf)
 #include </home/gui/AVRserial/avrbehaviour.h>
 
 /* baudrate settings are defined in <asm/termbits.h>, which is
@@ -40,6 +43,7 @@ included by <termios.h> */
 volatile int STOP=FALSE; 
 
 //		The volatile keyword defines a variable that will change due to external interactions. It is necessary to specify this because we do not want the compiler optimizing the code for the execution of that pre-defined var value.
+int test(void);
 
 int main(void)
 {
@@ -58,7 +62,6 @@ int main(void)
     char cli_buf[512];              //Used to store stdio input read from fd STDIN_FILENO
     char child_buf[512];            //Used to store child input read from fd read_child (pipe)
     char fifo_buf[512];             //Used to store fifo input read from fd fifofd_r (pipe)
-    char comb_buf[7] = {0};         //Used to store AVR key input (determined by values in avr_buf)
     pid_t cpid;                     //This variable will store the state of the fork() function
     int pipefd[2];                  //The following are file descriptors for the different pipes
     int pipe_stdio_1[2];            
@@ -219,8 +222,26 @@ int main(void)
                                 dprintf(write_child, "%s", comb_buf);
                                 
                                 //Returns input state to default STATE
-                                state = STATE;
+                                state = (STATE | AVRMODE);
                                 printf("Registered user combination!\n");
+                          }
+                          else if(state == (STATE | AVRMODE))
+                          {
+                              char* user;
+                              user = comb_eval(comb_buf);
+                              if(user == NULL)
+                              {
+                                    int tries = 3;
+                                    printf("\n!!ERROR PROCESSING YOUR COMBINATION!!\n");
+                                    printf("This message will be displayed if you either entered a non-registered combination, or if there exists more than one user with that combination.\n");
+                                    printf("Please retry, or check with the System Admin for further instructions.\n");
+                                    printf("You have got %d more tries before this incident is reported to the System Admin.\n", tries);
+                              }
+                              else
+                              {
+                                    printf("Combination successfully entered.\n");
+                                    printf("Welcome user %s!", user);
+                              }
                           }
                               
                           FILE * fd2 = fopen(COMBTXT, "a" ); 
@@ -280,6 +301,15 @@ int main(void)
                     dprintf(fd1, "%c%c%c", 0xF2, 'c', 0xF2);
                     printf("Close command sent!\n");
                 }
+                else if(strcmp(cli_buf, "r\n") == 0)
+                {
+                    dprintf(fd1, "%c%c%c", 0xF2, 'r', 0xF2);
+                    printf("Reg command sent!\n");
+                }
+                else if(strcmp(cli_buf, "test\n") == 0)
+                {
+                    test();
+                }
             }
             else if(pfds[2].revents & POLLIN)
             {
@@ -296,6 +326,7 @@ int main(void)
                     //Begins async input from the AVR
                     printf("Detected\n");
                     dprintf(fd1, "%c%c%c", 0xF2, 'r', 0xF2);
+                    clear_avrbuf();
                     
                     //Changes state variable to indicate AVR is in input mode
                     //state = 0b00000011
@@ -328,9 +359,11 @@ int main(void)
     return 0;
 }
 
+
+
 int test(void)
 {
-
-  return 0;
+    printf("Your user is:%s\n", comb_eval("777777"));
+    return 0;
 }
   

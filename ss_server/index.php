@@ -9,20 +9,23 @@
 		
 			function connect_req()
 			{
-				connect_to = setTimeout(function (){connect_refused(); exit();}, 3000);
+				connect_to = setTimeout(function (){connect_refused(); xhttp.abort();}, 3000);
 				
 				const xhttp = new XMLHttpRequest();
 				xhttp.onload = function ()
 				{
 					clearTimeout(connect_to);
+					
 					x = document.getElementById(0);
 					y = document.getElementById(1);
 					z = document.getElementById(2);
 					a = document.getElementById(3);
+					document.getElementById('select').style = true;
 					z.disabled = false;
 					a.disabled = false;
 					y.disabled = true;
-					x.innerHTML = this.response;
+					
+					x.innerHTML = this.responseText;
 				}
 				
 				xhttp.open("GET", "connect_server.php");
@@ -49,15 +52,15 @@
 				document.getElementById(3).disabled = true;
 				
 				const xhttp = new XMLHttpRequest();
-				xhttp.onreadystatechange = function()
+				xhttp.overrideMimeType("application/json");
+				xhttp.onload = function()
 					{
-						if (this.readyState == 4 && this.status == 200) 
-						{
-							var print = this.responseText + "</br>" + JSON.parse(this.);
-							document.getElementById(0).innerHTML = this.responseText;
-							document.getElementById(0).disabled = false;
-							
-						}
+					
+						let objJSON = JSON.parse(this.responseText);
+						x = objJSON.comb;
+						document.getElementById(0).innerHTML = x;
+						document.getElementById(0).disabled = false;
+					
 					};
 					
 				xhttp.open("GET", "registeruser.php?user=" + user, true);
@@ -92,7 +95,19 @@
 	<input id=2 type="button" onclick="adduser();" value="Add User" disabled>
 	</br>
 	</br>
-	<input id=3 type="button" onclick="registeruser('user');" value="Register User" disabled>
+	<?php
+		$sql = "select id, name from Combinations;";
+		$result = mysqli_query($conn, $sql);
+		echo "<select id='select' style='display: none'>";
+		foreach($result as $row)
+		{
+			echo "<option value={$row['name']}>{$row['name']}</option>";
+		}
+		echo "</select>";
+	?>
+	</br>
+	</br>
+	<input id=3 type="button" onclick="registeruser(document.getElementById('select').value);" value="Register User" disabled>
 	</br>
 	</br>
 	<p id=0 name='connect_resp'></p>

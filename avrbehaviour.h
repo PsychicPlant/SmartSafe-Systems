@@ -2,6 +2,7 @@ volatile int state = (STATE);		//Default state Input = 0; Reg = 0
 char avrkey2str(int);
 int comb_process(char, char *);
 int avrprocessing(char *, char *);
+void clear_avrbuf(void);
 
 char avrkey2str(int key){
 	
@@ -88,6 +89,7 @@ int avrprocessing(char *bufpt, char *comb_buf){
 		if ((avroutput == 0xF3) && ((state & AVRMODE) == 0))
 		{
 		  printf("\nMode ON\n");
+		  clear_avrbuf();
 		  state = state | AVRMODE;
 		}
 		else if ((avroutput == 0xF3) && ((state & AVRMODE) == 1))
@@ -96,19 +98,22 @@ int avrprocessing(char *bufpt, char *comb_buf){
 		  state = state & ~(AVRMODE);
 		}
 		else if (avroutput == 0xE7)
-		  printf("\nRe-enter combination\n");
+		{
+			printf("\nRe-enter combination\n");
+			clear_avrbuf();
+		}  
 		else
 		{ 
-			printf("\n%c\n", avrkey2str(avroutput));
+			printf("%c", avrkey2str(avroutput));
 			b = (comb_process(avroutput, comb_buf));
 			switch(b)
 			{
 				case 1:
-					printf("\n!%s!\n", comb_buf);
+					//printf("!%s!\n", comb_buf);
 				break;
 				
 				case 0:
-					printf("\n!%s!\t>>Combination acquired successfully!", comb_buf);
+					printf("\n!%s!\t>>Combination acquired successfully!\n", comb_buf);
 					b = 0;
 					i = 0;
 					return 1;
@@ -123,6 +128,14 @@ int avrprocessing(char *bufpt, char *comb_buf){
 	}
 	
 	return 0;
+}
+
+void clear_avrbuf(void)
+{
+	memset(comb_buf, 0, sizeof comb_buf);
+	b = 0;
+	i = 0;
+	return;
 }
 
 int comb_process(char input, char *comb)
@@ -140,5 +153,42 @@ int comb_process(char input, char *comb)
 	
 	i++;
 	return 1;
+}
+
+char* comb_eval(char* comb)
+{
+	char* user_ret = malloc(11 * sizeof (char));
+	
+	MYSQL *mysql = mysql_init(NULL);
+    const char *host = "localhost";
+    const char *user = "gui";
+    const char *passwd = "gui";
+    const char *db = "SmartSafe";
+    unsigned int port = 0;
+    const char *unix_socket = NULL;
+    unsigned long client_flag = 0;
+	
+	mysql = mysql_real_connect(mysql, host, user, passwd, db, port, unix_socket, client_flag);
+	
+	char* query = calloc(128, sizeof(char));
+	sprintf(query, "SELECT name FROM Combinations WHERE combination=%s;", comb);
+	mysql_query(mysql, query);
+	MYSQL_RES *result = mysql_store_result(mysql);
+	
+	MYSQL_ROW row;
+	if((row = mysql_fetch_row(result)))
+		user_ret = row[0];
+	else 
+	{
+		mysql_close(mysql);
+		return NULL;
+	}
+	if(!(mysql_fetch_row(result)))
+	{	
+		mysql_close(mysql);
+		return user_ret;
+	}
+	mysql_close(mysql);
+	return NULL;
 }
 
