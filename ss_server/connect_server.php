@@ -27,10 +27,25 @@
 			if($MYFIFO2 = fopen($filename2, "r"))
 			{
 				echo "</br>FIFO read pipe $filename2 opened.</br>Waiting for application response...</br>";
+				//------------------------------
+				//The following statements will send an encapsulated "!" character to the listening child
+				//which has just succeeded in opening the pipes. This will indicate to the child that they 
+				//can begin communications.
+				
 				$tmp = chr(0xF3);	
 				fwrite($MYFIFO1, "$tmp!$tmp", 3);
+				
+				//------------------------------
+				//The script will then wait for an answer from the child. This answer is mostly symbolic,
+				//as it is not parsed in this script, but it is nonetheless necessary and will cause
+				//the script to hang unless it is properly done.
+				//This reply is automatically programmed to be sent by the child and is defined in 
+				//childbehaviour.h.
+				
 				$answer = fread($MYFIFO2, 4);
 				echo "</br>$answer";
+				
+				//------------------------------
 				
 				fclose($MYFIFO1);
 				fclose($MYFIFO2);

@@ -101,7 +101,17 @@ int avrprocessing(char *bufpt, char *comb_buf){
 		{
 			printf("\nRe-enter combination\n");
 			clear_avrbuf();
-		}  
+		}
+		else if (avroutput == 'c')
+		{
+			printf("Status: Closed\n");
+			printf("\nMode OFF\n");
+			state = state & ~(AVRMODE);
+		}
+		else if (avroutput == 'o')
+		{
+			printf("Status: Open\n\nWarning. This safe will auto-lock in approximately 3 seconds.");
+		}
 		else
 		{ 
 			printf("%c", avrkey2str(avroutput));

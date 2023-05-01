@@ -98,15 +98,20 @@ int stop = TRUE;
 		                read(fifofd_r, &fifo_buf, 512);
 		                if(*fifo_buf == 0xF3)
 		                {
-                            
+                            //The switch case statements below serve as a lookup table for commands
+                            //sent specifically by the Webserver.
 		                    switch(fifo_buf[1])
 		                    {
+                                //The webserver sends the character encapsulated "!" character
+                                //if it succeeds in opening the FIFOs.
 		                        case '!':
                                     dprintf(write_parent, "Read by child\n");
                                     write(fifofd_w, "OK!", 4);
-                                    dprintf(write_parent, "Wrote to child\n");
+                                    dprintf(write_parent, "Wrote to server\n");
                                     break;
                                 
+                                //The webserver sends this signal to indicate the registration/update
+                                //of a user. The command is acknowledged and sent to the parent.
                                 case '+':
                                     dprintf(write_parent, "Registering user metrics...\n");
                                     sleep(1);

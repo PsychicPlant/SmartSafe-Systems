@@ -68,16 +68,20 @@ int main(void)
     int pipe_stdio_2[2];
 
     umask(011);
-    if(access(MYFIFO1, F_OK) != 0)   //This statement checks the existance of a fifo file of name defined by MYFIFO1, and promotes its creation
-    {                               //if it does not exist.
+    //This statement checks the existance of a fifo file of name defined
+    //by MYFIFO1, and promotes its creation
+    //if it does not exist.
+    if(access(MYFIFO1, F_OK) != 0) 
+    {  
         if(mkfifo(MYFIFO1, S_IRWXO | S_IRWXG | S_IRWXU | 0777) == -1)
           {perror("Error making FIFO file."); exit(-1);}
         else
           printf("Making new FIFO file: %s\n", MYFIFO1);
     }
     
-    if(access(MYFIFO2, F_OK) != 0)   //This statement checks the existance of a fifo file of name defined by MYFIFO1, and promotes its creation
-    {                               //if it does not exist.
+    //Same story with the following statement, but for file MYFIFO2.
+    if(access(MYFIFO2, F_OK) != 0)   
+    {
         if(mkfifo(MYFIFO2, S_IRWXO | S_IRWXG | S_IRWXU | 0777) == -1)
           {perror("Error making FIFO file."); exit(-1);}
         else
@@ -90,12 +94,19 @@ int main(void)
     pipe(pipe_stdio_1);
     pipe(pipe_stdio_2);
     
+    //----------------------------------------------------
+    //The code below forks a child and tells it to run a PHP script.
+    //This is essential to the init sequence and ensures that the file structure
+    //to support this service exists. This script will interact with
+    //the main child process to validate it is possible to communicate 
+    //between application and webserver
     if(fork() == 0)
     {
         system("curl -s http://localhost/connect_server.php");
         exit(0);
     }
     else
+    //----------------------------------------------------------
 
     cpid = fork();              //This statement creates a copy of this process and its memory (see fork() for more information) called a child process.
     if (cpid == -1) {           //Indicates any failure in creating a child process.
@@ -173,6 +184,18 @@ int main(void)
     tcflush(fd1, TCIFLUSH);
     tcsetattr(fd1,TCSANOW,&newtio);
 
+    //---------------------------
+    //Banner
+    
+    //---------------------------
+    system("clear");
+    printf("\n\nWelcome to SmartSafe Solutions!!\nVersion: 2.1\nAuthor: Guilherme Guimaraes Ruas\n\n------------Stand by for initiation sequence------------\n");
+
+    //---------------------------
+    //This is sent to guarantee the state of the AVR application is CLOSED
+    //at the execution of this program, so they can be synced from the get go
+    dprintf(fd1, "%c%c%c", 0xF2, 'c', 0xF2);
+    //---------------------------
     
     while (STOP==FALSE) 
     {     
