@@ -16,6 +16,7 @@
 #define AVRMODE 0x01    //Defines if AVR is in input mode or not
 #define AVRREG 0x02     //Defines if AVR is registering a new user, or evaluating an existing one
 
+int fd1;
 char comb_buf[7] = {0};         //Used to store AVR key input (determined by values in avr_buf)
 #include </home/gui/AVRserial/avrbehaviour.h>
 
@@ -48,7 +49,7 @@ int test(void);
 int main(void)
 {
 
-    int fd1, res, avrresp;
+    int res, avrresp;
     
     /*
      *  fd1 is going to be a file descriptor for serial0, where it will be used to read/write from/to it.
@@ -197,6 +198,8 @@ int main(void)
     dprintf(fd1, "%c%c%c", 0xF2, 'c', 0xF2);
     //---------------------------
     
+    int tries = 3;
+    
     while (STOP==FALSE) 
     {     
     /* loop until we have a terminating condition */
@@ -229,6 +232,7 @@ int main(void)
                 
                 if (*bufpt == 0xF1)
                 {
+                    //printf("Value = %x", avr_buf[1]);
                     avrresp = avrprocessing(bufpt, comb_buf);
                     if(avrresp == 1)
                     {
@@ -239,14 +243,18 @@ int main(void)
                             
                           if(state == (STATE | AVRMODE | AVRREG))   
                           {
-
                                 //Sends reg_status to child, which sends to webserver
                                 dprintf(cmd_child_write, "reg_ok\n");
                                 dprintf(write_child, "%s", comb_buf);
                                 
                                 //Returns input state to default STATE
-                                state = (STATE | AVRMODE);
+                                state = STATE;
                                 printf("Registered user combination!\n");
+                                tries = 3;
+                                
+                                dprintf(fd1, "%c%c%c", 0xF2, '1', 0xF2);
+                                sleep(5);
+                                dprintf(fd1, "%c%c%c", 0xF2, 'c', 0xF2);
                           }
                           else if(state == (STATE | AVRMODE))
                           {
@@ -254,16 +262,38 @@ int main(void)
                               user = comb_eval(comb_buf);
                               if(user == NULL)
                               {
-                                    int tries = 3;
-                                    printf("\n!!ERROR PROCESSING YOUR COMBINATION!!\n");
-                                    printf("This message will be displayed if you either entered a non-registered combination, or if there exists more than one user with that combination.\n");
-                                    printf("Please retry, or check with the System Admin for further instructions.\n");
-                                    printf("You have got %d more tries before this incident is reported to the System Admin.\n", tries);
+                                    if(--tries != 0)
+                                    {
+                                        printf("\n!!ERROR PROCESSING YOUR COMBINATION!!\n");
+                                        printf("This message will be displayed if you either entered a non-registered combination, or if there exists more than one user with that combination.\n");
+                                        printf("Please retry, or check with the System Admin for further instructions.\n");
+                                        printf("You have got %d more tries before this incident is reported to the System Admin.\n", tries);
+                                        dprintf(fd1, "%c%c%c", 0xF2, '3', 0xF2);
+                                        sleep(3);
+                                        state = STATE;
+                                        dprintf(fd1, "%c%c%c", 0xF2, 'i', 0xF2);
+                                    }
+                                    else
+                                    {
+                                        printf("\n!!ERROR PROCESSING YOUR COMBINATION!!\n\n");
+                                        printf("We have captured you on photo and reported this incident to the System's Administrator.\n");
+                                        dprintf(fd1, "%c%c%c", 0xF2, '3', 0xF2);
+                                        char systemcall[64];
+                                        sprintf(systemcall, "raspistill -q 40 -o images/capture%d.jpg", rand());
+                                        system(systemcall);
+                                        sleep(2);
+                                        dprintf(fd1, "%c%c%c", 0xF2, 'c', 0xF2);
+                                        tries = 3;
+                                    }
                               }
                               else
                               {
+                                    tries = 3;
                                     printf("Combination successfully entered.\n");
-                                    printf("Welcome user %s!", user);
+                                    printf("Welcome user %s!\n", user);
+                                    printf("Please scan your registered digit to confirm your identity...\n");
+                                    dprintf(fd1, "%c%c%c", 0xF2, '2', 0xF2);
+                                    
                               }
                           }
                               
@@ -326,8 +356,15 @@ int main(void)
                 }
                 else if(strcmp(cli_buf, "r\n") == 0)
                 {
+                    state = STATE;
                     dprintf(fd1, "%c%c%c", 0xF2, 'r', 0xF2);
-                    printf("Reg command sent!\n");
+                    printf("Register User command sent!\n");
+                }
+                else if(strcmp(cli_buf, "i\n") == 0)
+                {
+                    state = STATE;
+                    dprintf(fd1, "%c%c%c", 0xF2, 'i', 0xF2);
+                    printf("Force Input command sent!\n");
                 }
                 else if(strcmp(cli_buf, "test\n") == 0)
                 {
@@ -353,7 +390,7 @@ int main(void)
                     
                     //Changes state variable to indicate AVR is in input mode
                     //state = 0b00000011
-                    state = (STATE | AVRMODE | AVRREG); 
+                    state = (STATE | AVRREG); 
                               
                 }
                 else

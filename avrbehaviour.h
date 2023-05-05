@@ -4,67 +4,84 @@ int comb_process(char, char *);
 int avrprocessing(char *, char *);
 void clear_avrbuf(void);
 
+const int HASH = 0xF6;
+const int S1 = 0xFB;
+const int S2 = 0xFD;
+const int S3 = 0xFE;
+const int NUM1 = 0xBB;
+const int NUM2 = 0xBD;
+const int NUM3 = 0xBE;
+const int NUM4 = 0xDB;
+const int NUM5 = 0xDD;
+const int NUM6 = 0xDE;
+const int NUM7 = 0xEB;
+const int NUM8 = 0xED;
+const int NUM9 = 0xEE;
+const int POUND = 0xF3;
+const int NUM0 = 0xF5;
+
+
 char avrkey2str(int key){
 	
 	char character = 0;
 	switch(key)
 	{
-			case 0xcf:
+			case 0xbb:
 				
 				character = '1';
 				break;
 				
-			case 0x9f:
+			case 0xbd:
 			
 				character = '2';
 				break;
 				
-			case 0xdb:
+			case 0xbe:
 			
 				character = '3';
 				break;
 				
-			case 0xee:
+			case 0xdb:
 			
 				character = '4';	
 				break;
 				
-			case 0xbe:
+			case 0xdd:
 			
 				character = '5';
 				break;
 				
-			case 0xfa:
+			case 0xde:
 			
 				character = '6';
 				break;
 				
-			case 0xed:
+			case 0xeb:
 			
 				character = '7';
 				break;
 				
-			case 0xbd:
+			case 0xed:
 			
 				character = '8';
 				break;
 				
-			case 0xf9:
+			case 0xee:
 			
 				character = '9';
 				break;
 				
-			case 0xe7:
+			case 0xf3:
 			
 				character = '*';
 				break;
 				
-			case 0xb7:
+			case 0xf5:
 			
 				character = '0';
 				break;
 				
-			case 0xf3:
+			case 0xf6:
 			
 				character = '#';
 				break;
@@ -86,21 +103,23 @@ int avrprocessing(char *bufpt, char *comb_buf){
 	while((avroutput = (int)*(++bufpt)) != 0xF1)
 	{
 
-		if ((avroutput == 0xF3) && ((state & AVRMODE) == 0))
+		//printf("%x\n", avroutput);
+		if ((avroutput == HASH) && ((state & AVRMODE) == 0))
 		{
 		  printf("\nMode ON\n");
 		  clear_avrbuf();
 		  state = state | AVRMODE;
 		}
-		else if ((avroutput == 0xF3) && ((state & AVRMODE) == 1))
+		else if ((avroutput == HASH) && ((state & AVRMODE) == 1))
 		{
 		  printf("\nMode OFF\n");
 		  state = state & ~(AVRMODE);
 		}
-		else if (avroutput == 0xE7)
+		else if (avroutput == POUND)
 		{
 			printf("\nRe-enter combination\n");
 			clear_avrbuf();
+			dprintf(fd1, "%c%c%c", 0xF2, 'i', 0xF2);
 		}
 		else if (avroutput == 'c')
 		{
@@ -111,6 +130,10 @@ int avrprocessing(char *bufpt, char *comb_buf){
 		else if (avroutput == 'o')
 		{
 			printf("Status: Open\n\nWarning. This safe will auto-lock in approximately 3 seconds.");
+		}
+		else if (avroutput == 'f')
+		{
+			printf("FUCK\n");
 		}
 		else
 		{ 
