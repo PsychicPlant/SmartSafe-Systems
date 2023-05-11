@@ -9,7 +9,7 @@
 	<form action="insertuser.php" method="get" target="_self">
 		<p align="justify">
 		<fieldset>
-		    <legend>Name</legend>
+		    <legend>Name [Maximum of 10 characters]</legend>
 				<input type="text" id="name" name="name" size="15" min="0" required>
 	    </fieldset>
 		</br> 

@@ -97,7 +97,7 @@ int main(void)
         printf("\nFailed to init I2C communication.\n");
         return -1;
     }
-    printf("I2C communication successfully setup.\n\n");
+    printf("\nI2C communication successfully setup.\n");
 
     //The following statements will create pipes using the file descriptor arrays provided.
     //These are done right before the forking of this program.
