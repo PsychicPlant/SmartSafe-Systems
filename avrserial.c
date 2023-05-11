@@ -11,7 +11,9 @@
 #include <unistd.h>
 #include <poll.h>
 #include <mariadb/mysql.h>
+#include <wiringPiI2C.h>
 
+#define I2C_DEVICE_ID 0x20
 #define STATE 0x00
 #define AVRMODE 0x01    //Defines if AVR is in input mode or not
 #define AVRREG 0x02     //Defines if AVR is registering a new user, or evaluating an existing one
@@ -68,6 +70,7 @@ int main(void)
     int pipe_stdio_1[2];            
     int pipe_stdio_2[2];
 
+    system("clear");
     umask(011);
     //This statement checks the existance of a fifo file of name defined
     //by MYFIFO1, and promotes its creation
@@ -75,7 +78,7 @@ int main(void)
     if(access(MYFIFO1, F_OK) != 0) 
     {  
         if(mkfifo(MYFIFO1, S_IRWXO | S_IRWXG | S_IRWXU | 0777) == -1)
-          {perror("Error making FIFO file."); exit(-1);}
+          {perror("Error making FIFO file.\n"); exit(-1);}
         else
           printf("Making new FIFO file: %s\n", MYFIFO1);
     }
@@ -84,10 +87,17 @@ int main(void)
     if(access(MYFIFO2, F_OK) != 0)   
     {
         if(mkfifo(MYFIFO2, S_IRWXO | S_IRWXG | S_IRWXU | 0777) == -1)
-          {perror("Error making FIFO file."); exit(-1);}
+          {perror("Error making FIFO file.\n"); exit(-1);}
         else
           printf("Making new FIFO file: %s\n", MYFIFO2);
     }
+    
+    int fd2c = wiringPiI2CSetup(I2C_DEVICE_ID);
+    if (fd2c == -1) {
+        printf("\nFailed to init I2C communication.\n");
+        return -1;
+    }
+    printf("I2C communication successfully setup.\n\n");
 
     //The following statements will create pipes using the file descriptor arrays provided.
     //These are done right before the forking of this program.
@@ -189,7 +199,7 @@ int main(void)
     //Banner
     
     //---------------------------
-    system("clear");
+    
     printf("\n\nWelcome to SmartSafe Solutions!!\nVersion: 2.1\nAuthor: Guilherme Guimaraes Ruas\n\n------------Stand by for initiation sequence------------\n");
 
     //---------------------------
@@ -198,7 +208,10 @@ int main(void)
     dprintf(fd1, "%c%c%c", 0xF2, 'c', 0xF2);
     //---------------------------
     
-    int tries = 3;
+    volatile int received_i2c, stored_i2c = 0;
+    volatile int tries = 3;
+    //unsigned int sleepy = 500000;
+    
     
     while (STOP==FALSE) 
     {     
@@ -210,7 +223,7 @@ int main(void)
     to the actual number of characters actually read */
 
         
-        int ready = poll(pfds, numfd, 10);
+        int ready = poll(pfds, numfd, 100);
         switch(ready)
         {
           case -1:
@@ -218,10 +231,33 @@ int main(void)
             exit(-1);
             break;
           case 0:
+            
+            //printf("%d\n", received_i2c);
+            received_i2c = wiringPiI2CRead(fd2c);
+            if(received_i2c == stored_i2c){}
+            else
+            {
+                if(received_i2c == 0xff)
+                {
+                    printf("\n\n!!!I2C BUS LINE ERROR!!!\n\n");
+                }
+                else if(received_i2c == 0x80){}
+                else if(received_i2c == -1)
+                {
+                    printf("Sensor error. Try to maintain fingerprint centered and immobile.\n");
+                }
+                else
+                {
+                    printf("\n+ User %d detected. Please enter your combination now. +\n", received_i2c);
+                    stored_i2c = received_i2c;
+                }
+                
+            }
+          
             break;
           
           default:
-          {
+            {
             
             if(pfds[0].revents & POLLIN)
             { 
@@ -258,9 +294,11 @@ int main(void)
                           }
                           else if(state == (STATE | AVRMODE))
                           {
-                              char* user;
-                              user = comb_eval(comb_buf);
-                              if(user == NULL)
+                              char* user_name;
+                              int user_id;
+                              user_name = comb_eval(comb_buf);
+                              user_id = comb_eval_id(user_name);
+                              if(user_name == NULL)
                               {
                                     if(--tries != 0)
                                     {
@@ -288,11 +326,41 @@ int main(void)
                               }
                               else
                               {
-                                    tries = 3;
+                                    
                                     printf("Combination successfully entered.\n");
-                                    printf("Welcome user %s!\n", user);
-                                    printf("Please scan your registered digit to confirm your identity...\n");
-                                    dprintf(fd1, "%c%c%c", 0xF2, '2', 0xF2);
+                                    printf("Welcome user %s!\n", user_name);
+                                    printf("Evaluating fingerprint....\n");
+                                    //dprintf(fd1, "%c%c%c", 0xF2, '2', 0xF2);
+                                    
+                                    if(stored_i2c == 0)
+                                    {
+                                        printf("Error: No User Found.\nPlease try again\n\n");
+                                        tries--;
+                                        state = STATE;
+                                        dprintf(fd1, "%c%c%c", 0xF2, 'i', 0xF2);
+                                    }
+                                    else
+                                    {
+                                        if(user_id == stored_i2c)
+                                        {
+                                            printf("User Fingerprint Found! Door unlocked.\n");
+                                            tries = 3;
+                                            stored_i2c = 0;
+                                            wiringPiI2CWrite(fd2c, 1);
+                                            dprintf(fd1, "%c%c%c", 0xF2, 'o', 0xF2);
+                                            sleep(5);
+                                        }
+                                        else
+                                        {
+                                            printf("Incorrect Fingerprint. Try again.\n");
+                                            printf("usr:%d, id:%d\n", user_id, stored_i2c);
+                                            tries--;
+                                            stored_i2c = 0;
+                                            wiringPiI2CWrite(fd2c, 1);
+                                            state = STATE;
+                                            dprintf(fd1, "%c%c%c", 0xF2, 'i', 0xF2);
+                                        }
+                                    }
                                     
                               }
                           }
@@ -366,6 +434,11 @@ int main(void)
                     dprintf(fd1, "%c%c%c", 0xF2, 'i', 0xF2);
                     printf("Force Input command sent!\n");
                 }
+                else if(strcmp(cli_buf, "h\n") == 0)
+                {
+                    dprintf(fd1, "%c%c%c", 0xF2, 'h', 0xF2);
+                    printf("Hello command sent!\n");
+                }
                 else if(strcmp(cli_buf, "test\n") == 0)
                 {
                     test();
@@ -398,7 +471,7 @@ int main(void)
             }
 
             
-            printf("\n");
+            //printf("\n");
             break;
           }
           
@@ -423,7 +496,7 @@ int main(void)
 
 int test(void)
 {
-    printf("Your user is:%s\n", comb_eval("777777"));
+    //printf("Your user is:%s\n", comb_eval("777777"));
     return 0;
 }
   

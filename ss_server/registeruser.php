@@ -13,7 +13,7 @@ $conn = mysqli_connect($servername, $username, $password, $dbname);
 
 $filename1 = "/home/gui/AVRserial/pipe1";
 $filename2 = "/home/gui/AVRserial/pipe2";
-$user = $_GET["user"];
+$user = urldecode($_GET["user"]);
 
 if($MYFIFO1 = fopen($filename1, "w"))
 {
@@ -43,8 +43,6 @@ if($MYFIFO1 = fopen($filename1, "w"))
 		
 		$sql = "update Combinations set combination='$combination' where name='$user';";
 		$result = mysqli_query($conn, $sql);
-
-		
 
 		mysqli_close($conn);
 		fclose($MYFIFO1);

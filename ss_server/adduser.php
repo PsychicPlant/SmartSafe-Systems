@@ -6,7 +6,7 @@
 	<h3>Add SmartSafe User</h3>
 	</br>
 	<p>Use the below form to add a new user to the SmartSafe database.</p>
-	<form action="insertuser.php" method="get" target="_blank">
+	<form action="insertuser.php" method="get" target="_self">
 		<p align="justify">
 		<fieldset>
 		    <legend>Name</legend>

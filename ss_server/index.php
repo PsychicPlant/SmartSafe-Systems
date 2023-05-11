@@ -63,7 +63,9 @@
 					
 					};
 					
-				xhttp.open("GET", "registeruser.php?user=" + user, true);
+				var user_encoded = encodeURIComponent(user);
+				//window.alert(user);
+				xhttp.open("GET", "registeruser.php?user=" + user_encoded, true);
 				xhttp.send();
 			}
 			
@@ -101,7 +103,7 @@
 		echo "<select id='select' style='display: none'>";
 		foreach($result as $row)
 		{
-			echo "<option value={$row['name']}>{$row['name']}</option>";
+			echo "<option value=\"{$row['name']}\">{$row['name']}</option>";
 		}
 		echo "</select>";
 	?>

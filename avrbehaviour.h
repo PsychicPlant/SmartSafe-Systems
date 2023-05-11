@@ -127,6 +127,11 @@ int avrprocessing(char *bufpt, char *comb_buf){
 			printf("\nMode OFF\n");
 			state = state & ~(AVRMODE);
 		}
+		else if (avroutput == 'h')
+		{
+			dprintf(fd1, "%c%c%c", 0xF2, 'h', 0xF2);
+			//printf(".");
+		}
 		else if (avroutput == 'o')
 		{
 			printf("Status: Open\n\nWarning. This safe will auto-lock in approximately 3 seconds.");
@@ -202,7 +207,7 @@ char* comb_eval(char* comb)
     unsigned long client_flag = 0;
 	
 	mysql = mysql_real_connect(mysql, host, user, passwd, db, port, unix_socket, client_flag);
-	
+
 	char* query = calloc(128, sizeof(char));
 	sprintf(query, "SELECT name FROM Combinations WHERE combination=%s;", comb);
 	mysql_query(mysql, query);
@@ -223,5 +228,42 @@ char* comb_eval(char* comb)
 	}
 	mysql_close(mysql);
 	return NULL;
+}
+
+int comb_eval_id(char* name)
+{
+	int user_ret = 0;
+	
+	MYSQL *mysql = mysql_init(NULL);
+    const char *host = "localhost";
+    const char *user = "gui";
+    const char *passwd = "gui";
+    const char *db = "SmartSafe";
+    unsigned int port = 0;
+    const char *unix_socket = NULL;
+    unsigned long client_flag = 0;
+	
+	mysql = mysql_real_connect(mysql, host, user, passwd, db, port, unix_socket, client_flag);
+
+	char* query = calloc(128, sizeof(char));
+	sprintf(query, "SELECT id FROM Combinations WHERE name=\"%s\";", name);
+	mysql_query(mysql, query);
+	MYSQL_RES *result = mysql_store_result(mysql);
+	
+	MYSQL_ROW row;
+	if((row = mysql_fetch_row(result)))
+		user_ret = atoi(row[0]);
+	else 
+	{
+		mysql_close(mysql);
+		return 0;
+	}
+	if(!(mysql_fetch_row(result)))
+	{	
+		mysql_close(mysql);
+		return user_ret;
+	}
+	mysql_close(mysql);
+	return 0;
 }
 
