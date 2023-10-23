@@ -63,12 +63,6 @@
 //		The bzero function erases all bytes the sizeof specified object, starting at a memory location.
 
 
-
-
-
-
-
-
         /* 
           BAUDRATE: Set bps rate. You could also use cfsetispeed and cfsetospeed.
           CRTSCTS : output hardware flow control (only used if the cable has
